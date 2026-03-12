@@ -1,25 +1,122 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import { useResumeState } from '@/hooks/useResumeState';
 import ResumeInputPanel from '@/components/ResumeInputPanel';
+import ResumeChat from '@/components/ResumeChat';
 import ParsedSectionsEditor from '@/components/ParsedSectionsEditor';
 import ResumePreview from '@/components/ResumePreview';
 import PrintToolbar from '@/components/PrintToolbar';
+import SessionPicker from '@/components/SessionPicker';
+import LoginPage from '@/app/login/page';
 import { ResumeData } from '@/types/resume';
 
 export default function Home() {
+  const { data: authSession, status } = useSession();
   const state = useResumeState();
   const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'preview'>('input');
   const [template, setTemplate] = useState<'classic' | 'modern' | 'compact'>('classic');
   const [showEditor, setShowEditor] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const handleParsed = (data: ResumeData) => {
+  // Session management
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionName, setCurrentSessionName] = useState('Resume Session');
+  const [saving, setSaving] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-save resume data to current session (debounced)
+  useEffect(() => {
+    if (!currentSessionId || !authSession?.user) return;
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await fetch(`/api/sessions/${currentSessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resumeData: state.resume }),
+        });
+      } catch { /* ignore save errors */ }
+      setSaving(false);
+    }, 2000);
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [state.resume, currentSessionId, authSession?.user]);
+
+  // Load session data when a session is selected
+  const handleSelectSession = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.resumeData && Object.keys(data.resumeData).length > 0 && data.resumeData.basics) {
+        state.loadParsedResume(data.resumeData);
+        setShowEditor(true);
+      }
+      setCurrentSessionId(id);
+      setCurrentSessionName(data.name || 'Resume Session');
+    } catch { /* ignore */ }
+  }, [state]);
+
+  // Create a new session
+  const handleNewSession = useCallback(async () => {
+    if (!authSession?.user) return;
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'New Resume' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentSessionId(data.id);
+        setCurrentSessionName(data.name || 'Resume Session');
+        state.clearResume();
+        setShowEditor(false);
+        setActiveTab('input');
+      }
+    } catch { /* ignore */ }
+  }, [authSession?.user, state]);
+
+  // When user first loads and is authenticated, create or load most recent session
+  useEffect(() => {
+    if (status !== 'authenticated' || currentSessionId) return;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.sessions?.length > 0) {
+          handleSelectSession(data.sessions[0].id);
+        } else {
+          handleNewSession();
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [status, currentSessionId, handleSelectSession, handleNewSession]);
+
+  const handleParsed = useCallback((data: ResumeData) => {
     state.loadParsedResume(data);
     setShowEditor(true);
     setActiveTab('editor');
-  };
+
+    // Update session name based on resume name
+    if (currentSessionId && data.basics?.name) {
+      const nextSessionName = `${data.basics.name}'s Resume`;
+      setCurrentSessionName(nextSessionName);
+      fetch(`/api/sessions/${currentSessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nextSessionName }),
+      }).catch(() => {});
+    }
+  }, [state, currentSessionId]);
 
   const handleSample = () => {
     state.loadSampleData();
@@ -33,6 +130,30 @@ export default function Home() {
     setActiveTab('input');
   };
 
+  const handleApplyEdits = useCallback((edits: Partial<ResumeData>) => {
+    state.loadParsedResume({ ...state.resume, ...edits });
+  }, [state]);
+
+  // Show loading while checking auth
+  if (status === 'loading') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex items-center gap-2 text-gray-500">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="text-sm">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (status === 'unauthenticated') {
+    return <LoginPage />;
+  }
+
   const hasContent = state.resume.basics.name || state.resume.summary || state.resume.experience.length > 0;
 
   return (
@@ -45,8 +166,15 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <span className="text-sm font-semibold text-gray-900">CV Edit Pro</span>
+          <span className="text-sm font-semibold text-gray-900 hidden sm:block">CV Edit Pro</span>
         </div>
+
+        {/* Session Picker */}
+        <SessionPicker
+          currentSessionId={currentSessionId}
+          onSelectSession={handleSelectSession}
+          onNewSession={handleNewSession}
+        />
 
         <div className="flex-1" />
 
@@ -75,8 +203,22 @@ export default function Home() {
         </div>
 
         <span className="text-xs text-gray-400 hidden sm:block">
-          {hasContent ? '● Autosaved' : 'No content yet'}
+          {saving ? '● Saving…' : hasContent ? '● Saved' : 'No content yet'}
         </span>
+
+        {/* User menu */}
+        <div className="flex items-center gap-2 ml-2 border-l border-gray-200 pl-3">
+          <span className="text-xs text-gray-500 hidden sm:block">{authSession?.user?.name || authSession?.user?.email}</span>
+          <button
+            onClick={() => signOut()}
+            className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors rounded hover:bg-gray-100"
+            title="Sign out"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* Mobile Tabs */}
@@ -127,13 +269,19 @@ export default function Home() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
             {(activeTab !== 'editor' || !showEditor) ? (
-              <ResumeInputPanel
-                onParsed={handleParsed}
-                onSample={handleSample}
-                onClear={handleClear}
-              />
+              <div className="flex flex-col h-full min-h-0">
+                <ResumeInputPanel
+                  onParsed={handleParsed}
+                  onSample={handleSample}
+                  onClear={handleClear}
+                />
+                {/* Chat interface */}
+                <div className="mt-3 flex-1 min-h-[250px] flex flex-col border border-gray-200 rounded-lg p-3 bg-white">
+                  <ResumeChat resume={state.resume} onApplyEdits={handleApplyEdits} sessionId={currentSessionId} />
+                </div>
+              </div>
             ) : (
               <ParsedSectionsEditor
                 resume={state.resume}
@@ -166,7 +314,7 @@ export default function Home() {
             (activeTab === 'input' || activeTab === 'editor') ? 'hidden lg:flex' : 'flex',
           ].join(' ')}
         >
-          <PrintToolbar template={template} onTemplateChange={setTemplate} />
+          <PrintToolbar template={template} onTemplateChange={setTemplate} resume={state.resume} sessionName={currentSessionName} />
           <div className="flex-1 overflow-y-auto p-6 flex justify-center">
             <div className="w-full max-w-[794px] shadow-lg ring-1 ring-gray-200">
               <ResumePreview ref={previewRef} resume={state.resume} template={template} />

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { parseResume } from '@/lib/resumeParser';
+import { normalizeAIResponse } from '@/lib/normalizeAI';
 import { sampleResumeText } from '@/lib/sampleData';
 import { ResumeData } from '@/types/resume';
 
@@ -15,6 +16,7 @@ export default function ResumeInputPanel({ onParsed, onSample, onClear }: Props)
   const [text, setText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState('');
+  const [useAI, setUseAI] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleParse = async () => {
@@ -24,12 +26,37 @@ export default function ResumeInputPanel({ onParsed, onSample, onClear }: Props)
     }
     setParsing(true);
     setMessage('');
-    // Simulate a brief processing delay for UX
-    await new Promise((r) => setTimeout(r, 400));
+
+    if (useAI) {
+      try {
+        setMessage('🤖 AI is parsing your resume…');
+        const res = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const json = await res.json();
+        if (res.ok && json.data) {
+          const data = normalizeAIResponse(json.data);
+          onParsed(data);
+          setMessage('✓ Resume parsed with AI. Review and edit below.');
+          setParsing(false);
+          return;
+        }
+        // AI failed — fall through to local parser
+        console.warn('AI parse failed, falling back to local parser:', json.error);
+      } catch (err) {
+        console.warn('AI parse request failed, falling back to local parser:', err);
+      }
+    }
+
+    // Local regex fallback
     try {
       const data = parseResume(text);
       onParsed(data);
-      setMessage('✓ Resume parsed successfully. Review and edit below.');
+      setMessage(useAI
+        ? '⚠ AI unavailable — parsed with local parser. Some fields may need manual editing.'
+        : '✓ Resume parsed successfully. Review and edit below.');
     } catch {
       setMessage('Parse error — please check your text format.');
     }
@@ -133,13 +160,21 @@ export default function ResumeInputPanel({ onParsed, onSample, onClear }: Props)
 
       <div className="mt-1 p-3 bg-gray-50 rounded-lg border border-gray-100">
         <p className="text-xs text-gray-500 font-medium mb-1">AI Enhancement</p>
-        <div className="flex items-center gap-2 opacity-50 cursor-not-allowed select-none">
-          <div className="w-8 h-4 bg-gray-300 rounded-full relative">
-            <div className="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5 shadow-sm" />
+        <button
+          type="button"
+          onClick={() => setUseAI((v) => !v)}
+          className="flex items-center gap-2"
+        >
+          <div className={`w-8 h-4 rounded-full relative transition-colors ${useAI ? 'bg-blue-500' : 'bg-gray-300'}`}>
+            <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 shadow-sm transition-transform ${useAI ? 'left-[18px]' : 'left-0.5'}`} />
           </div>
-          <span className="text-xs text-gray-500">Use AI (API key required)</span>
-        </div>
-        <p className="text-xs text-gray-400 mt-1">Connect an OpenAI key in settings to enable AI-powered bullet enhancement and summary generation.</p>
+          <span className="text-xs text-gray-600">{useAI ? 'AI parsing enabled' : 'Local parsing only'}</span>
+        </button>
+        <p className="text-xs text-gray-400 mt-1">
+          {useAI
+            ? 'GPT-4o-mini will parse your resume for best accuracy. Falls back to local parser if unavailable.'
+            : 'Using regex-based local parser. Toggle on for AI-powered parsing.'}
+        </p>
       </div>
     </div>
   );

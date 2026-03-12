@@ -9,14 +9,14 @@ import {
 import { generateId } from '@/lib/utils';
 
 const SECTION_PATTERNS: Record<string, RegExp> = {
-  experience: /^(work\s+)?experience|employment|career\s+history|professional\s+experience/i,
-  education: /^education|academic\s+background|qualifications/i,
-  skills: /^(technical\s+)?skills|core\s+competencies|expertise|technologies/i,
-  summary: /^(professional\s+)?summary|profile|objective|about(\s+me)?/i,
-  projects: /^(personal\s+|key\s+)?projects/i,
-  certifications: /^certifications?|certificates?|credentials|licenses?/i,
-  awards: /^awards?|honors?|achievements?|accomplishments?/i,
-  languages: /^languages?/i,
+  experience: /\b(work\s+)?experience\b|\bemployment\b|\bcareer\s+history\b|\bprofessional\s+experience\b/i,
+  education: /\beducation\b|\bacademic\s+background\b|\bqualifications\b/i,
+  skills: /\b(technical\s+)?skills\b|\bcore\s+competencies\b|\bexpertise\b|\btechnologies\b/i,
+  summary: /\b(professional\s+)?summary\b|\bprofile\b|\bobjective\b|\babout(\s+me)?\b/i,
+  projects: /\bprojects\b/i,
+  certifications: /\bcertifications?\b|\bcertificates?\b|\bcredentials\b|\blicenses?\b/i,
+  awards: /\bawards?\b|\bhonors?\b|\bachievements?\b|\baccomplishments?\b/i,
+  languages: /\blanguages?\b/i,
 };
 
 const DATE_RANGE_RE =
@@ -27,7 +27,7 @@ const NAME_PATTERN = /^[A-Z][a-zÀ-ÖØ-öø-ÿ'-]+(\s+[A-Z][a-zÀ-ÖØ-öø-ÿ'
 
 function detectSectionType(line: string): string | null {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.length > 60) return null;
+  if (!trimmed || trimmed.length > 80) return null;
   for (const [key, pattern] of Object.entries(SECTION_PATTERNS)) {
     if (pattern.test(trimmed)) return key;
   }
@@ -36,7 +36,7 @@ function detectSectionType(line: string): string | null {
 
 function isSectionHeader(line: string): boolean {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.length > 70) return false;
+  if (!trimmed || trimmed.length > 80) return false;
   if (detectSectionType(trimmed)) return true;
   // All-caps line that looks like a header
   if (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && /^[A-Z\s&/-]+$/.test(trimmed)) {

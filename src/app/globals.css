@@ -24,47 +24,34 @@ body,
 
 /* ── Print styles ───────────────────────────────────────────────── */
 @media print {
-  html,
-  body {
+  @page {
+    size: letter;
     margin: 0;
-    padding: 0;
-    background: #fff;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  .no-print {
-    display: none !important;
-  }
-
-  /* Show only the preview */
-  body > * {
-    display: none !important;
-  }
-
-  .cv-preview {
-    display: block !important;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    box-shadow: none !important;
-    margin: 0 !important;
-    padding: 0.75in 0.75in !important;
-  }
-
-  .experience-item {
+  .cv-preview .experience-item {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  h2,
-  h3 {
+  .cv-preview h2,
+  .cv-preview h3 {
     page-break-after: avoid;
     break-after: avoid;
   }
 
-  ul {
+  .cv-preview ul {
     page-break-inside: avoid;
     break-inside: avoid;
   }
