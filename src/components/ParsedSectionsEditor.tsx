@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { ResumeData, CertificationItem, ResumeBasics, ExperienceItem, EducationItem, SkillCategory, ProjectItem } from '@/types/resume';
+import { generateId } from '@/lib/utils';
 import BasicInfoEditor from './BasicInfoEditor';
 import ExperienceEditor from './ExperienceEditor';
 import EducationEditor from './EducationEditor';
@@ -227,7 +228,7 @@ export default function ParsedSectionsEditor(props: Props) {
               </div>
             ))}
             <button
-              onClick={() => props.onUpdateCertifications([...resume.certifications, { id: crypto.randomUUID(), name: '', issuer: '', date: '', visible: true }])}
+              onClick={() => props.onUpdateCertifications([...resume.certifications, { id: generateId(), name: '', issuer: '', date: '', visible: true }])}
               className="w-full py-1.5 border border-dashed border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
             >
               + Add Certification

@@ -6,6 +6,7 @@ import {
   ProjectItem,
   CertificationItem,
 } from '@/types/resume';
+import { generateId } from '@/lib/utils';
 
 const SECTION_PATTERNS: Record<string, RegExp> = {
   experience: /^(work\s+)?experience|employment|career\s+history|professional\s+experience/i,
@@ -21,12 +22,8 @@ const SECTION_PATTERNS: Record<string, RegExp> = {
 const DATE_RANGE_RE =
   /((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—]\s*((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4}|present|current|now)/i;
 
-function uid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
+/** Matches a proper name: 2–4 space-separated words each starting with a capital letter. */
+const NAME_PATTERN = /^[A-Z][a-zÀ-ÖØ-öø-ÿ'-]+(\s+[A-Z][a-zÀ-ÖØ-öø-ÿ'-]*){1,3}$/;
 
 function detectSectionType(line: string): string | null {
   const trimmed = line.trim();
@@ -90,13 +87,13 @@ function parseHeader(lines: string[]): {
   for (const line of lines) {
     const t = line.trim();
     if (!t) continue;
-    if (t.match(/[@|http|linkedin|github]/i)) continue;
+    if (t.match(/@|https?:|linkedin\.com|github\.com/i)) continue;
     if (t.match(/[\+]?[(]?[0-9]{3}[)]?[-\s.]/)) continue;
-    if (!name && /^[A-Z][a-z]+(\s+[A-Z][a-z]*){1,3}$/.test(t)) {
+    if (!name && NAME_PATTERN.test(t)) {
       name = t;
       continue;
     }
-    if (name && !title && t.length < 80 && !t.match(/[@(]/)) {
+    if (name && !title && t.length < 80 && !t.match(/[@(|]/)) {
       title = t;
       break;
     }
@@ -155,12 +152,17 @@ function parseExperience(lines: string[]): ExperienceItem[] {
       const titleLine = lines[i]?.trim() ?? '';
       const nextLine = lines[i + 1]?.trim() ?? '';
 
-      // Pattern: "Job Title | Company" or "Job Title at Company" or two separate lines
-      if (titleLine.includes('|') || titleLine.includes(' at ') || titleLine.includes(',')) {
-        const parts = titleLine.split(/\s*[\|,]\s*|\s+at\s+/i);
+      // Pattern: "Job Title | Company | Location" or "Job Title at Company" or two separate lines
+      if (titleLine.includes('|')) {
+        const parts = titleLine.split(/\s*\|\s*/);
         jobTitle = parts[0]?.trim() ?? '';
         company = parts[1]?.trim() ?? '';
         location = parts[2]?.trim() ?? '';
+        i++;
+      } else if (titleLine.includes(' at ')) {
+        const parts = titleLine.split(/\s+at\s+/i);
+        jobTitle = parts[0]?.trim() ?? '';
+        company = parts[1]?.trim() ?? '';
         i++;
       } else if (!titleLine.match(DATE_RANGE_RE) && nextLine.match(DATE_RANGE_RE)) {
         jobTitle = titleLine;
@@ -187,19 +189,31 @@ function parseExperience(lines: string[]): ExperienceItem[] {
       // Advance past date line if needed
       if (dateIndex > i - 1) i = dateIndex + 1;
 
-      // Collect bullets
+      // Collect bullets — stop when we hit a new job entry or section header
       const bulletLines: string[] = [];
       while (i < lines.length) {
         const bl = lines[i]?.trim() ?? '';
         if (!bl) { i++; continue; }
         if (isSectionHeader(bl)) break;
+        // A non-bullet line that is followed by a date line signals a new job entry;
+        // check only the next two non-empty lines to avoid creating a new array each iteration
+        if (!bl.match(/^[•\-*▪►✓✔]/) && bulletLines.length > 0) {
+          let nextNonEmpty: string | undefined;
+          for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+            const candidate = lines[j]?.trim();
+            if (candidate) { nextNonEmpty = candidate; break; }
+          }
+          if (nextNonEmpty?.match(DATE_RANGE_RE)) break;
+        }
         if (bl.match(DATE_RANGE_RE) && bulletLines.length > 0) break;
+        // A pipe-separated line without a leading bullet looks like "Title | Company"
+        if (!bl.match(/^[•\-*▪►✓✔]/) && bl.includes('|') && bulletLines.length > 0) break;
         bulletLines.push(lines[i]);
         i++;
       }
 
       items.push({
-        id: uid(),
+        id: generateId(),
         jobTitle,
         company,
         location,
@@ -232,25 +246,45 @@ function parseEducation(lines: string[]): EducationItem[] {
       let startDate = '';
       let endDate = '';
 
-      // Look for year range or single year
-      const rangeMatch = line.match(DATE_RANGE_RE);
-      const yearMatch = line.match(/\b(\d{4})\b/);
-
-      if (rangeMatch) {
-        startDate = rangeMatch[1];
-        endDate = rangeMatch[2];
-        degree = line.replace(DATE_RANGE_RE, '').trim().replace(/[-–—|,]+$/, '').trim();
-      } else if (yearMatch) {
-        endDate = yearMatch[1];
-        degree = line.replace(/\b\d{4}\b/, '').trim().replace(/[-–—|,]+$/, '').trim();
-      }
-
-      const next = lines[i + 1]?.trim() ?? '';
-      if (next && !next.match(/\b\d{4}\b/) && !next.match(/^[•\-*]/)) {
-        institution = next;
-        i += 2;
-      } else {
+      // If line has a pipe separator, split into degree | institution
+      if (line.includes('|') && !line.match(DATE_RANGE_RE)) {
+        const parts = line.split(/\s*\|\s*/);
+        degree = parts[0]?.trim() ?? line;
+        institution = parts[1]?.trim() ?? '';
+        location = parts[2]?.trim() ?? '';
         i++;
+        // Next line may be the date range
+        const nextLine = lines[i]?.trim() ?? '';
+        const nextRangeMatch = nextLine.match(DATE_RANGE_RE);
+        if (nextRangeMatch) {
+          startDate = nextRangeMatch[1];
+          endDate = nextRangeMatch[2];
+          i++;
+        } else if (nextLine.match(/\b(\d{4})\b/)) {
+          endDate = nextLine.match(/\b(\d{4})\b/)![1];
+          i++;
+        }
+      } else {
+        // Look for year range or single year in the current line
+        const rangeMatch = line.match(DATE_RANGE_RE);
+        const yearMatch = line.match(/\b(\d{4})\b/);
+
+        if (rangeMatch) {
+          startDate = rangeMatch[1];
+          endDate = rangeMatch[2];
+          degree = line.replace(DATE_RANGE_RE, '').trim().replace(/[-–—|,]+$/, '').trim();
+        } else if (yearMatch) {
+          endDate = yearMatch[1];
+          degree = line.replace(/\b\d{4}\b/, '').trim().replace(/[-–—|,]+$/, '').trim();
+        }
+
+        const next = lines[i + 1]?.trim() ?? '';
+        if (next && !next.match(/\b\d{4}\b/) && !next.match(/^[•\-*]/)) {
+          institution = next;
+          i += 2;
+        } else {
+          i++;
+        }
       }
 
       const detailLines: string[] = [];
@@ -263,7 +297,7 @@ function parseEducation(lines: string[]): EducationItem[] {
       }
 
       items.push({
-        id: uid(),
+        id: generateId(),
         degree,
         institution,
         location,
@@ -293,7 +327,7 @@ function parseSkills(lines: string[]): SkillCategory[] {
     if (colonSplit) {
       if (current) categories.push(current);
       current = {
-        id: uid(),
+        id: generateId(),
         name: colonSplit[1].trim(),
         items: colonSplit[2].split(/[,;|]/).map((s) => s.trim()).filter(Boolean),
       };
@@ -305,7 +339,7 @@ function parseSkills(lines: string[]): SkillCategory[] {
       // Flat list
       const items = t.split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
       if (items.length > 1) {
-        categories.push({ id: uid(), name: 'Skills', items });
+        categories.push({ id: generateId(), name: 'Skills', items });
         return categories;
       }
     }
@@ -317,7 +351,7 @@ function parseSkills(lines: string[]): SkillCategory[] {
       .split(/[,;|\n]/)
       .map((s) => s.trim())
       .filter(Boolean);
-    categories.push({ id: uid(), name: 'Skills', items: allItems });
+    categories.push({ id: generateId(), name: 'Skills', items: allItems });
   }
   return categories;
 }
@@ -355,7 +389,7 @@ function parseProjects(lines: string[]): ProjectItem[] {
       }
 
       items.push({
-        id: uid(),
+        id: generateId(),
         name,
         description,
         technologies,
@@ -377,7 +411,7 @@ function parseCertifications(lines: string[]): CertificationItem[] {
     .map((l) => {
       const parts = l.replace(/^[•\-*]\s*/, '').split(/[|–—,]/).map((s) => s.trim());
       return {
-        id: uid(),
+        id: generateId(),
         name: parts[0] ?? l,
         issuer: parts[1] ?? '',
         date: parts[2] ?? '',

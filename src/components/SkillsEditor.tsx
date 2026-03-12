@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SkillCategory } from '@/types/resume';
+import { generateId } from '@/lib/utils';
 
 interface Props {
   skills: SkillCategory[];
@@ -100,7 +101,7 @@ export default function SkillsEditor({ skills, onChange }: Props) {
   const addCategory = () => {
     onChange([
       ...skills,
-      { id: crypto.randomUUID(), name: 'New Category', items: [] },
+      { id: generateId(), name: 'New Category', items: [] },
     ]);
   };
 

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ResumeData, ExperienceItem, EducationItem, SkillCategory, ProjectItem, CertificationItem, ResumeBasics } from '@/types/resume';
 import { sampleResumeData } from '@/lib/sampleData';
+import { generateId } from '@/lib/utils';
 
 const STORAGE_KEY = 'cv-edit-pro-resume';
 const MAX_HISTORY = 30;
@@ -119,7 +120,7 @@ export function useResumeState() {
 
   const addExperience = useCallback(() => {
     const newItem: ExperienceItem = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       jobTitle: '',
       company: '',
       location: '',
@@ -145,7 +146,7 @@ export function useResumeState() {
 
   const addEducation = useCallback(() => {
     const newItem: EducationItem = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       degree: '',
       institution: '',
       location: '',
@@ -175,7 +176,7 @@ export function useResumeState() {
 
   const addProject = useCallback(() => {
     const newItem: ProjectItem = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: '',
       description: '',
       technologies: [],
