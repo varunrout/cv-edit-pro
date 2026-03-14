@@ -17,8 +17,8 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
   const isHidden = (section: string) => hiddenSections.includes(section);
   const isCompact = template === 'compact';
 
-  const sectionHeaderClass = `text-[10px] font-bold uppercase tracking-[0.12em] text-gray-800 border-b border-gray-800 pb-0.5 ${isCompact ? 'mb-1' : 'mb-2'}`;
-  const sectionClass = isCompact ? 'mb-2' : 'mb-4';
+  const sectionHeaderClass = `resume-section-heading text-[10px] font-bold uppercase tracking-[0.12em] text-gray-800 border-b border-gray-800 pb-0.5 ${isCompact ? 'mb-1' : 'mb-2'}`;
+  const sectionClass = `resume-section ${isCompact ? 'mb-2' : 'mb-4'}`;
 
   const contactItems = [
     basics.email,
@@ -50,7 +50,7 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
             <h2 className={sectionHeaderClass}>Work Experience</h2>
             <div className={isCompact ? 'space-y-2' : 'space-y-3'}>
               {visibleExp.map((exp) => (
-                <div key={exp.id} className="experience-item">
+                <div key={exp.id} className="resume-entry experience-item">
                   <div className="flex justify-between items-baseline gap-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-[11px] font-semibold text-gray-900">{exp.jobTitle}</span>
@@ -93,7 +93,7 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
             <h2 className={sectionHeaderClass}>Education</h2>
             <div className="space-y-2">
               {visibleEdu.map((edu) => (
-                <div key={edu.id}>
+                <div key={edu.id} className="resume-entry">
                   <div className="flex justify-between items-baseline gap-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-[11px] font-semibold text-gray-900">{edu.degree}</span>
@@ -153,7 +153,7 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
             <h2 className={sectionHeaderClass}>Projects</h2>
             <div className={isCompact ? 'space-y-1.5' : 'space-y-2.5'}>
               {visibleProj.map((proj) => (
-                <div key={proj.id}>
+                <div key={proj.id} className="resume-entry">
                   <div className="flex items-baseline gap-1.5 flex-wrap">
                     <span className="text-[11px] font-semibold text-gray-900">{proj.name}</span>
                     {proj.technologies.length > 0 && (

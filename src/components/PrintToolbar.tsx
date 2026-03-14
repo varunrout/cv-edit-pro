@@ -601,13 +601,31 @@ function getPrintHeadMarkup() {
         background: #fff !important;
       }
 
-      .cv-preview p,
-      .cv-preview li,
+      .cv-preview .resume-section-heading,
       .cv-preview h2,
-      .cv-preview h3,
-      .cv-preview .experience-item {
-        break-inside: avoid-page;
-        page-break-inside: avoid;
+      .cv-preview h3 {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
+      .cv-preview .resume-entry,
+      .cv-preview .resume-section,
+      .cv-preview p,
+      .cv-preview ul,
+      .cv-preview li {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+
+      .cv-preview .resume-entry > :first-child {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
+      .cv-preview p,
+      .cv-preview li {
+        orphans: 2;
+        widows: 2;
       }
     </style>
   `;

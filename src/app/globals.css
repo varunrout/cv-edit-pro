@@ -40,19 +40,30 @@ body,
     print-color-adjust: exact;
   }
 
-  .cv-preview .experience-item {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
+  .cv-preview .resume-section-heading,
   .cv-preview h2,
   .cv-preview h3 {
     page-break-after: avoid;
     break-after: avoid;
   }
 
-  .cv-preview ul {
-    page-break-inside: avoid;
-    break-inside: avoid;
+  .cv-preview .resume-entry,
+  .cv-preview .resume-section,
+  .cv-preview p,
+  .cv-preview ul,
+  .cv-preview li {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  .cv-preview .resume-entry > :first-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .cv-preview p,
+  .cv-preview li {
+    orphans: 2;
+    widows: 2;
   }
 }
