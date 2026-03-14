@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prisma:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "vercel-build": "prisma generate && prisma db push && next build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
