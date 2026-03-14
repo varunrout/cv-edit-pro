@@ -623,7 +623,7 @@ export default function PrintToolbar({ template, onTemplateChange, resume, sessi
       setExporting(true);
       const doc = buildResumePdf(resume, template);
       doc.autoPrint({ variant: 'non-conform' });
-      const blobUrl = doc.output('bloburl');
+      const blobUrl = String(doc.output('bloburl'));
       window.open(blobUrl, '_blank', 'noopener,noreferrer');
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } finally {
