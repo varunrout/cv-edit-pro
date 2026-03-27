@@ -13,9 +13,10 @@ interface Props {
   currentSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  onRenameSession?: (id: string, newName: string) => void;
 }
 
-export default function SessionPicker({ currentSessionId, onSelectSession, onNewSession }: Props) {
+export default function SessionPicker({ currentSessionId, onSelectSession, onNewSession, onRenameSession }: Props) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -52,9 +53,11 @@ export default function SessionPicker({ currentSessionId, onSelectSession, onNew
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: renameValue.trim() }),
     });
+    const trimmed = renameValue.trim();
     setSessions((s) =>
-      s.map((item) => (item.id === id ? { ...item, name: renameValue.trim() } : item))
+      s.map((item) => (item.id === id ? { ...item, name: trimmed } : item))
     );
+    if (onRenameSession) onRenameSession(id, trimmed);
     setRenaming(null);
   };
 

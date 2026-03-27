@@ -174,10 +174,9 @@ export default function Home() {
           currentSessionId={currentSessionId}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
-        />
-
-        <div className="flex-1" />
-
+            onRenameSession={(id, newName) => {
+              if (id === currentSessionId) setCurrentSessionName(newName);
+            }}
         {/* Undo/Redo */}
         <div className="flex items-center gap-1">
           <button
