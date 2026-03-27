@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { Suspense, useState, useRef, useCallback, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useResumeState } from '@/hooks/useResumeState';
 import ResumeInputPanel from '@/components/ResumeInputPanel';
 import ResumeChat from '@/components/ResumeChat';
@@ -9,15 +11,30 @@ import ParsedSectionsEditor from '@/components/ParsedSectionsEditor';
 import ResumePreview from '@/components/ResumePreview';
 import PrintToolbar from '@/components/PrintToolbar';
 import SessionPicker from '@/components/SessionPicker';
+import VersionTimeline from '@/components/VersionTimeline';
 import LoginPage from '@/app/login/page';
 import { ResumeData } from '@/types/resume';
 
 export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <span className="text-sm text-gray-400">Loading...</span>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const { data: authSession, status } = useSession();
+  const searchParams = useSearchParams();
   const state = useResumeState();
   const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'preview'>('input');
   const [template, setTemplate] = useState<'classic' | 'modern' | 'compact'>('classic');
   const [showEditor, setShowEditor] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   // Session management
@@ -87,8 +104,16 @@ export default function Home() {
   useEffect(() => {
     if (status !== 'authenticated' || currentSessionId) return;
 
+    const sessionFromUrl = searchParams.get('session');
+
     (async () => {
       try {
+        if (sessionFromUrl) {
+          // URL specifies a session — load it directly
+          handleSelectSession(sessionFromUrl);
+          return;
+        }
+
         const res = await fetch('/api/sessions');
         if (!res.ok) return;
         const data = await res.json();
@@ -99,7 +124,7 @@ export default function Home() {
         }
       } catch { /* ignore */ }
     })();
-  }, [status, currentSessionId, handleSelectSession, handleNewSession]);
+  }, [status, currentSessionId, handleSelectSession, handleNewSession, searchParams]);
 
   const handleParsed = useCallback((data: ResumeData) => {
     state.loadParsedResume(data);
@@ -113,7 +138,12 @@ export default function Home() {
       fetch(`/api/sessions/${currentSessionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nextSessionName }),
+        body: JSON.stringify({
+          name: nextSessionName,
+          resumeData: data,
+          snapshotSource: 'parse',
+          snapshotLabel: 'Resume uploaded / parsed',
+        }),
       }).catch(() => {});
     }
   }, [state, currentSessionId]);
@@ -169,6 +199,17 @@ export default function Home() {
           <span className="text-sm font-semibold text-gray-900 hidden sm:block">CV Edit Pro</span>
         </div>
 
+        {/* Dashboard Link */}
+        <Link
+          href="/dashboard"
+          className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors rounded hover:bg-gray-100"
+          title="All Resumes"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+          </svg>
+        </Link>
+
         {/* Session Picker */}
         <SessionPicker
           currentSessionId={currentSessionId}
@@ -205,6 +246,19 @@ export default function Home() {
         <span className="text-xs text-gray-400 hidden sm:block">
           {saving ? '● Saving…' : hasContent ? '● Saved' : 'No content yet'}
         </span>
+
+        {/* Version History Toggle */}
+        <button
+          onClick={() => setShowVersions(!showVersions)}
+          className={`p-1.5 transition-colors rounded hover:bg-gray-100 ${
+            showVersions ? 'text-blue-600' : 'text-gray-400 hover:text-gray-700'
+          }`}
+          title="Version History"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
 
         {/* User menu */}
         <div className="flex items-center gap-2 ml-2 border-l border-gray-200 pl-3">
@@ -321,6 +375,19 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Version History Panel */}
+        {showVersions && (
+          <div className="w-80 border-l border-gray-200 bg-white flex-shrink-0 overflow-hidden hidden lg:flex">
+            <VersionTimeline
+              sessionId={currentSessionId}
+              onRestore={(data) => {
+                state.loadParsedResume(data);
+              }}
+              onClose={() => setShowVersions(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

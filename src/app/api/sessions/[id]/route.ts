@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createVersionSnapshot } from '@/lib/versionSnapshot';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -61,6 +62,16 @@ export async function PUT(req: Request, { params }: Params) {
   const updateData: Record<string, string> = {};
   if (body.name !== undefined) updateData.name = body.name;
   if (body.resumeData !== undefined) updateData.resumeData = JSON.stringify(body.resumeData);
+
+  // If a snapshot source is provided, create a version snapshot before updating
+  if (body.snapshotSource && body.resumeData !== undefined) {
+    await createVersionSnapshot(
+      id,
+      body.snapshotSource,
+      body.snapshotLabel || 'Snapshot',
+      existing.resumeData,
+    );
+  }
 
   const updated = await prisma.resumeSession.update({
     where: { id },

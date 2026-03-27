@@ -12,10 +12,30 @@ export async function GET() {
   const sessions = await prisma.resumeSession.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true, name: true, createdAt: true, updatedAt: true },
+    select: { id: true, name: true, resumeData: true, createdAt: true, updatedAt: true },
   });
 
-  return NextResponse.json({ sessions });
+  // Extract light preview info from resumeData
+  const result = sessions.map((s) => {
+    let basics: { name?: string; title?: string; email?: string } = {};
+    try {
+      const parsed = JSON.parse(s.resumeData);
+      basics = {
+        name: parsed.basics?.name || '',
+        title: parsed.basics?.title || '',
+        email: parsed.basics?.email || '',
+      };
+    } catch { /* ignore */ }
+    return {
+      id: s.id,
+      name: s.name,
+      basics,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    };
+  });
+
+  return NextResponse.json({ sessions: result });
 }
 
 // POST /api/sessions — create a new session

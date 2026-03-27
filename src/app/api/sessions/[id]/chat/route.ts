@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createVersionSnapshot } from '@/lib/versionSnapshot';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -25,6 +26,12 @@ export async function POST(req: Request, { params }: Params) {
   const { role, content, edits } = await req.json();
   if (!role || !content) {
     return NextResponse.json({ error: 'Missing role or content' }, { status: 400 });
+  }
+
+  // If this is an assistant message with edits, snapshot the current state before the edit
+  if (role === 'assistant' && edits) {
+    const editSummary = content?.slice(0, 80) || 'AI edit';
+    await createVersionSnapshot(id, 'ai-edit', `AI: ${editSummary}`);
   }
 
   const message = await prisma.chatMessage.create({
