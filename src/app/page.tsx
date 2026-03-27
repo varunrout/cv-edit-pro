@@ -177,6 +177,7 @@ export default function Home() {
             onRenameSession={(id, newName) => {
               if (id === currentSessionId) setCurrentSessionName(newName);
             }}
+          />
         {/* Undo/Redo */}
         <div className="flex items-center gap-1">
           <button
