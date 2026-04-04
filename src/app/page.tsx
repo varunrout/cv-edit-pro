@@ -42,6 +42,32 @@ function HomeContent() {
   const [currentSessionName, setCurrentSessionName] = useState('Resume Session');
   const [saving, setSaving] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep session name in sync when user edits basics.name
+  useEffect(() => {
+    const name = state.resume.basics.name?.trim();
+    if (!name || !currentSessionId) return;
+
+    const newSessionName = `${name}'s Resume`;
+    if (newSessionName === currentSessionName) return;
+
+    setCurrentSessionName(newSessionName);
+
+    // Debounced persist to server
+    if (nameUpdateTimer.current) clearTimeout(nameUpdateTimer.current);
+    nameUpdateTimer.current = setTimeout(() => {
+      fetch(`/api/sessions/${currentSessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newSessionName }),
+      }).catch(() => {});
+    }, 1500);
+
+    return () => {
+      if (nameUpdateTimer.current) clearTimeout(nameUpdateTimer.current);
+    };
+  }, [state.resume.basics.name, currentSessionId, currentSessionName]);
 
   // Auto-save resume data to current session (debounced)
   useEffect(() => {
@@ -131,15 +157,12 @@ function HomeContent() {
     setShowEditor(true);
     setActiveTab('editor');
 
-    // Update session name based on resume name
-    if (currentSessionId && data.basics?.name) {
-      const nextSessionName = `${data.basics.name}'s Resume`;
-      setCurrentSessionName(nextSessionName);
+    // Snapshot on parse (name sync is handled by the basics.name effect)
+    if (currentSessionId) {
       fetch(`/api/sessions/${currentSessionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: nextSessionName,
           resumeData: data,
           snapshotSource: 'parse',
           snapshotLabel: 'Resume uploaded / parsed',
