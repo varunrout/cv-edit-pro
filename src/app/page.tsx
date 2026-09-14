@@ -77,10 +77,15 @@ function HomeContent() {
     return saveChainRef.current;
   }, []);
 
-  // Keep session name in sync when user edits basics.name
+  // Keep session name in sync when user edits basics.name — but only while
+  // the name still looks auto-generated. Once the user manually renames the
+  // session (e.g. "Varun Rout FA Senior Data Scientist" for a job-tailored
+  // resume), further name edits must not silently overwrite that.
+  const sessionNameCustomizedRef = useRef(false);
+
   useEffect(() => {
     const name = state.resume.basics.name?.trim();
-    if (!name || !currentSessionId) return;
+    if (!name || !currentSessionId || sessionNameCustomizedRef.current) return;
 
     const newSessionName = `${name}'s Resume`;
     if (newSessionName === currentSessionName) return;
@@ -147,7 +152,17 @@ function HomeContent() {
         setShowEditor(true);
       }
       setCurrentSessionId(id);
-      setCurrentSessionName(data.name || 'Resume Session');
+      const loadedName = data.name || 'Resume Session';
+      setCurrentSessionName(loadedName);
+      // Treat the loaded name as customized unless it exactly matches what
+      // auto-sync would itself generate — that's the only way to tell a
+      // deliberate rename apart from the auto-generated default.
+      const resumeName = data.resumeData?.basics?.name?.trim();
+      sessionNameCustomizedRef.current = !(
+        loadedName === 'Resume Session' ||
+        loadedName === 'New Resume' ||
+        (resumeName && loadedName === `${resumeName}'s Resume`)
+      );
     } catch { /* ignore */ }
   }, [state, flushSave]);
 
@@ -165,6 +180,7 @@ function HomeContent() {
         const data = await res.json();
         setCurrentSessionId(data.id);
         setCurrentSessionName(data.name || 'Resume Session');
+        sessionNameCustomizedRef.current = false;
         state.clearResume();
         setShowEditor(false);
         setActiveTab('input');
@@ -285,7 +301,10 @@ function HomeContent() {
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
             onRenameSession={(id, newName) => {
-              if (id === currentSessionId) setCurrentSessionName(newName);
+              if (id === currentSessionId) {
+                setCurrentSessionName(newName);
+                sessionNameCustomizedRef.current = true;
+              }
             }}
           />
         {/* Undo/Redo */}
