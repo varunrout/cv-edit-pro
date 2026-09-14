@@ -3,30 +3,16 @@
 import { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import type { ResumeData } from '@/types/resume';
+import { TEMPLATES, getTemplateMetrics, type TemplateId } from '@/lib/templates';
 
 interface Props {
-  template: 'classic' | 'modern' | 'compact';
-  onTemplateChange: (t: 'classic' | 'modern' | 'compact') => void;
+  template: TemplateId;
+  onTemplateChange: (t: TemplateId) => void;
   resume: ResumeData;
   sessionName: string;
 }
 
-const TEMPLATES = [
-  { id: 'classic' as const, label: 'Classic' },
-  { id: 'modern' as const, label: 'Modern' },
-  { id: 'compact' as const, label: 'Compact' },
-];
-
-type TemplateMetrics = {
-  nameSize: number;
-  titleSize: number;
-  bodySize: number;
-  smallSize: number;
-  sectionSize: number;
-  lineGap: number;
-  compactGap: number;
-  sectionGap: number;
-};
+type TemplateMetrics = ReturnType<typeof getTemplateMetrics>;
 
 type PdfContext = {
   doc: jsPDF;
@@ -39,32 +25,6 @@ type PdfContext = {
   y: number;
   metrics: TemplateMetrics;
 };
-
-function getMetrics(template: Props['template']): TemplateMetrics {
-  if (template === 'compact') {
-    return {
-      nameSize: 18,
-      titleSize: 10,
-      bodySize: 8.7,
-      smallSize: 8.1,
-      sectionSize: 9,
-      lineGap: 4,
-      compactGap: 1.2,
-      sectionGap: 3.4,
-    };
-  }
-
-  return {
-    nameSize: 20,
-    titleSize: 11,
-    bodySize: 9.2,
-    smallSize: 8.5,
-    sectionSize: 9.5,
-    lineGap: 4.5,
-    compactGap: 1.8,
-    sectionGap: 4.2,
-  };
-}
 
 function sanitizeFilename(value: string) {
   return value.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'resume';
@@ -87,7 +47,7 @@ function createPdfContext(template: Props['template']): PdfContext {
     marginBottom,
     contentWidth: pageWidth - marginX * 2,
     y: marginTop,
-    metrics: getMetrics(template),
+    metrics: getTemplateMetrics(template),
   };
 }
 
@@ -158,12 +118,12 @@ function sectionHeaderHeight(ctx: PdfContext) {
 function drawSectionHeader(ctx: PdfContext, title: string) {
   ensureSpace(ctx, sectionHeaderHeight(ctx));
   ctx.y += 1;
-  ctx.doc.setFont('helvetica', 'bold');
+  ctx.doc.setFont(ctx.metrics.font, 'bold');
   ctx.doc.setFontSize(ctx.metrics.sectionSize);
-  ctx.doc.setTextColor(31, 41, 55);
+  ctx.doc.setTextColor(...ctx.metrics.accentColor);
   ctx.doc.text(title.toUpperCase(), ctx.marginX, ctx.y);
   ctx.y += 1.6;
-  ctx.doc.setDrawColor(55, 65, 81);
+  ctx.doc.setDrawColor(...ctx.metrics.accentColor);
   ctx.doc.setLineWidth(0.35);
   ctx.doc.line(ctx.marginX, ctx.y, ctx.pageWidth - ctx.marginX, ctx.y);
   ctx.y += ctx.metrics.sectionGap;
@@ -180,14 +140,15 @@ function drawHeader(ctx: PdfContext, resume: ResumeData) {
     basics.portfolio,
   ].filter(Boolean);
 
-  ctx.doc.setFont('helvetica', 'bold');
+  ctx.doc.setFont(ctx.metrics.font, 'bold');
   ctx.doc.setFontSize(ctx.metrics.nameSize);
   ctx.doc.setTextColor(17, 24, 39);
-  ctx.doc.text(basics.name || 'Your Name', ctx.marginX, ctx.y);
+  const displayName = basics.name || 'Your Name';
+  ctx.doc.text(ctx.metrics.font === 'times' ? displayName.toUpperCase() : displayName, ctx.marginX, ctx.y);
   ctx.y += ctx.metrics.nameSize * 0.35;
 
   if (basics.title) {
-    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFont(ctx.metrics.font, 'bold');
     ctx.doc.setFontSize(ctx.metrics.titleSize);
     ctx.doc.setTextColor(75, 85, 99);
     ctx.doc.text(basics.title, ctx.marginX, ctx.y);
@@ -195,7 +156,7 @@ function drawHeader(ctx: PdfContext, resume: ResumeData) {
   }
 
   if (contactItems.length > 0) {
-    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFont(ctx.metrics.font, 'normal');
     ctx.doc.setFontSize(ctx.metrics.smallSize);
     ctx.doc.setTextColor(107, 114, 128);
     writeWrapped(ctx, contactItems.join('  •  '), { lineGap: ctx.metrics.lineGap - 0.3 });
@@ -274,7 +235,7 @@ function drawSummary(ctx: PdfContext, resume: ResumeData) {
   }
 
   drawSectionHeader(ctx, 'Professional Summary');
-  ctx.doc.setFont('helvetica', 'normal');
+  ctx.doc.setFont(ctx.metrics.font, 'normal');
   ctx.doc.setFontSize(ctx.metrics.bodySize);
   ctx.doc.setTextColor(55, 65, 81);
   writeWrapped(ctx, resume.summary, { lineGap: ctx.metrics.lineGap });
@@ -292,7 +253,7 @@ function drawExperience(ctx: PdfContext, resume: ResumeData) {
   items.forEach((item) => {
     ensureFitsIfPossible(ctx, estimateExperienceHeaderHeight(ctx, item));
 
-    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFont(ctx.metrics.font, 'bold');
     ctx.doc.setFontSize(ctx.metrics.bodySize + 1);
     ctx.doc.setTextColor(17, 24, 39);
     writeWrapped(ctx, [item.jobTitle, item.company].filter(Boolean).join(' · '), {
@@ -302,20 +263,20 @@ function drawExperience(ctx: PdfContext, resume: ResumeData) {
 
     const dateText = [item.startDate, item.endDate].filter(Boolean).join(' – ');
     if (dateText) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       ctx.doc.text(dateText, ctx.pageWidth - ctx.marginX, ctx.y - ctx.metrics.lineGap, { align: 'right' });
     }
 
     if (item.location) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       writeWrapped(ctx, item.location, { lineGap: ctx.metrics.lineGap - 0.3 });
     }
 
-    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFont(ctx.metrics.font, 'normal');
     ctx.doc.setFontSize(ctx.metrics.bodySize);
     ctx.doc.setTextColor(55, 65, 81);
     item.bullets.filter(Boolean).forEach((bullet) => {
@@ -337,7 +298,7 @@ function drawEducation(ctx: PdfContext, resume: ResumeData) {
   items.forEach((item) => {
     ensureFitsIfPossible(ctx, estimateEducationHeaderHeight(ctx, item));
 
-    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFont(ctx.metrics.font, 'bold');
     ctx.doc.setFontSize(ctx.metrics.bodySize + 0.8);
     ctx.doc.setTextColor(17, 24, 39);
     writeWrapped(ctx, [item.degree, item.institution].filter(Boolean).join(' · '), {
@@ -347,20 +308,20 @@ function drawEducation(ctx: PdfContext, resume: ResumeData) {
 
     const dateText = [item.startDate, item.endDate].filter(Boolean).join(' – ');
     if (dateText) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       ctx.doc.text(dateText, ctx.pageWidth - ctx.marginX, ctx.y - ctx.metrics.lineGap, { align: 'right' });
     }
 
     if (item.location) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       writeWrapped(ctx, item.location, { lineGap: ctx.metrics.lineGap - 0.4 });
     }
 
-    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFont(ctx.metrics.font, 'normal');
     ctx.doc.setFontSize(ctx.metrics.bodySize);
     ctx.doc.setTextColor(55, 65, 81);
     item.details.filter(Boolean).forEach((detail) => {
@@ -386,7 +347,7 @@ function drawSkills(ctx: PdfContext, resume: ResumeData) {
   }
 
   drawSectionHeader(ctx, 'Skills');
-  ctx.doc.setFont('helvetica', 'normal');
+  ctx.doc.setFont(ctx.metrics.font, 'normal');
   ctx.doc.setFontSize(ctx.metrics.bodySize);
   ctx.doc.setTextColor(55, 65, 81);
 
@@ -409,26 +370,26 @@ function drawProjects(ctx: PdfContext, resume: ResumeData) {
   items.forEach((item) => {
     ensureFitsIfPossible(ctx, estimateProjectLeadHeight(ctx, item));
 
-    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFont(ctx.metrics.font, 'bold');
     ctx.doc.setFontSize(ctx.metrics.bodySize + 0.8);
     ctx.doc.setTextColor(17, 24, 39);
     writeWrapped(ctx, item.name, { lineGap: ctx.metrics.lineGap });
 
     if (item.technologies.length) {
-      ctx.doc.setFont('helvetica', 'italic');
+      ctx.doc.setFont(ctx.metrics.font, 'italic');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       writeWrapped(ctx, item.technologies.join(', '), { lineGap: ctx.metrics.lineGap - 0.4 });
     }
 
     if (item.description) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.bodySize);
       ctx.doc.setTextColor(75, 85, 99);
       writeWrapped(ctx, item.description, { lineGap: ctx.metrics.lineGap - 0.1 });
     }
 
-    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFont(ctx.metrics.font, 'normal');
     ctx.doc.setFontSize(ctx.metrics.bodySize);
     ctx.doc.setTextColor(55, 65, 81);
     item.bullets.filter(Boolean).forEach((bullet) => {
@@ -450,7 +411,7 @@ function drawCertifications(ctx: PdfContext, resume: ResumeData) {
   items.forEach((item) => {
     ensureFitsIfPossible(ctx, estimateCertificationLineHeight(ctx, item));
 
-    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFont(ctx.metrics.font, 'normal');
     ctx.doc.setFontSize(ctx.metrics.bodySize);
     ctx.doc.setTextColor(55, 65, 81);
     writeWrapped(ctx, `• ${[item.name, item.issuer].filter(Boolean).join(' · ')}`, {
@@ -459,7 +420,7 @@ function drawCertifications(ctx: PdfContext, resume: ResumeData) {
     });
 
     if (item.date) {
-      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFont(ctx.metrics.font, 'normal');
       ctx.doc.setFontSize(ctx.metrics.smallSize);
       ctx.doc.setTextColor(107, 114, 128);
       ctx.doc.text(item.date, ctx.pageWidth - ctx.marginX, ctx.y - ctx.metrics.lineGap, { align: 'right' });
@@ -483,7 +444,7 @@ function drawSimpleListSection(ctx: PdfContext, title: string, items: string[]) 
   }
 
   drawSectionHeader(ctx, title);
-  ctx.doc.setFont('helvetica', 'normal');
+  ctx.doc.setFont(ctx.metrics.font, 'normal');
   ctx.doc.setFontSize(ctx.metrics.bodySize);
   ctx.doc.setTextColor(55, 65, 81);
   filtered.forEach((item) => writeBullet(ctx, item));
@@ -501,7 +462,7 @@ function drawLanguages(ctx: PdfContext, resume: ResumeData) {
   }
 
   drawSectionHeader(ctx, 'Languages');
-  ctx.doc.setFont('helvetica', 'normal');
+  ctx.doc.setFont(ctx.metrics.font, 'normal');
   ctx.doc.setFontSize(ctx.metrics.bodySize);
   ctx.doc.setTextColor(55, 65, 81);
   writeWrapped(ctx, items.join(' • '), { lineGap: ctx.metrics.lineGap });

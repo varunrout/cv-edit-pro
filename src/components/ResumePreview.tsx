@@ -2,10 +2,11 @@
 
 import { forwardRef } from 'react';
 import { ResumeData } from '@/types/resume';
+import type { TemplateId } from '@/lib/templates';
 
 interface Props {
   resume: ResumeData;
-  template?: 'classic' | 'modern' | 'compact';
+  template?: TemplateId;
 }
 
 const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
@@ -16,8 +17,11 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
 
   const isHidden = (section: string) => hiddenSections.includes(section);
   const isCompact = template === 'compact';
+  const isClassical = template === 'classical';
 
-  const sectionHeaderClass = `resume-section-heading text-[10px] font-bold uppercase tracking-[0.12em] text-gray-800 border-b border-gray-800 pb-0.5 ${isCompact ? 'mb-1' : 'mb-2'}`;
+  const sectionHeaderClass = isClassical
+    ? `resume-section-heading text-[10px] font-semibold uppercase tracking-[0.06em] text-[#201f1d] border-b border-[#20201d29] pb-0.5 mb-2`
+    : `resume-section-heading text-[10px] font-bold uppercase tracking-[0.12em] text-gray-800 border-b border-gray-800 pb-0.5 ${isCompact ? 'mb-1' : 'mb-2'}`;
   const sectionClass = `resume-section ${isCompact ? 'mb-2' : 'mb-4'}`;
 
   const contactItems = [
@@ -246,19 +250,26 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
         maxWidth: '794px',
         minHeight: '1123px',
         padding: isCompact ? '48px 56px' : '56px 64px',
-        fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
+        fontFamily: isClassical
+          ? '"var(--font-lora)", Georgia, serif'
+          : '"Inter", "Helvetica Neue", Arial, sans-serif',
         boxSizing: 'border-box',
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact',
       }}
     >
       {/* Header */}
-      <div className={isCompact ? 'mb-3' : 'mb-5'}>
+      <div
+        className={isCompact ? 'mb-3' : 'mb-5'}
+        style={isClassical ? { borderBottom: '2px solid #201f1d', paddingBottom: '7px' } : undefined}
+      >
         <h1
           style={{
-            fontSize: isCompact ? '22px' : '26px',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
+            fontSize: isClassical ? '24px' : isCompact ? '22px' : '26px',
+            fontFamily: isClassical ? '"var(--font-cormorant-garamond)", Georgia, serif' : undefined,
+            fontWeight: isClassical ? 400 : 700,
+            letterSpacing: isClassical ? '0.06em' : '-0.02em',
+            textTransform: isClassical ? 'uppercase' : 'none',
             color: '#111827',
             lineHeight: 1.1,
             marginBottom: '4px',
@@ -269,8 +280,9 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
         {basics.title && (
           <p
             style={{
-              fontSize: '13px',
-              color: '#4B5563',
+              fontSize: isClassical ? '12px' : '13px',
+              fontFamily: isClassical ? '"var(--font-cormorant-garamond)", Georgia, serif' : undefined,
+              color: isClassical ? '#444141' : '#4B5563',
               fontWeight: 500,
               marginBottom: '6px',
               letterSpacing: '0.01em',
@@ -280,8 +292,15 @@ const ResumePreview = forwardRef<HTMLDivElement, Props>(function ResumePreview(
           </p>
         )}
         {contactItems.length > 0 && (
-          <p style={{ fontSize: '10px', color: '#6B7280', lineHeight: '1.6' }}>
-            {contactItems.join('  ·  ')}
+          <p
+            style={{
+              fontSize: '10px',
+              color: isClassical ? '#605d5d' : '#6B7280',
+              lineHeight: '1.6',
+              letterSpacing: isClassical ? '0.01em' : undefined,
+            }}
+          >
+            {contactItems.join(isClassical ? '  |  ' : '  ·  ')}
           </p>
         )}
       </div>

@@ -14,6 +14,7 @@ import SessionPicker from '@/components/SessionPicker';
 import VersionTimeline from '@/components/VersionTimeline';
 import LoginPage from '@/app/login/page';
 import { ResumeData } from '@/types/resume';
+import type { TemplateId } from '@/lib/templates';
 
 export default function Home() {
   return (
@@ -32,7 +33,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const state = useResumeState();
   const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'preview'>('input');
-  const [template, setTemplate] = useState<'classic' | 'modern' | 'compact'>('classic');
+  const [template, setTemplate] = useState<TemplateId>('classic');
   const [showEditor, setShowEditor] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
