@@ -616,7 +616,11 @@ export default function PrintToolbar({ template, onTemplateChange, resume, sessi
     try {
       setExporting(true);
       const doc = buildResumePdf(resume, template);
-      doc.save(`${sanitizeFilename(sessionName || 'Resume Session')}.pdf`);
+      // Prefer the name typed into the resume itself (basics.name) so the
+      // downloaded file matches what the person actually edited, rather
+      // than the auto-generated session name (e.g. "X's Resume").
+      const fileName = resume.basics.name?.trim() || sessionName || 'Resume';
+      doc.save(`${sanitizeFilename(fileName)}.pdf`);
     } finally {
       setExporting(false);
     }
