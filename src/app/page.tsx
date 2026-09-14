@@ -41,9 +41,41 @@ function HomeContent() {
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionName, setCurrentSessionName] = useState('Resume Session');
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest not-yet-persisted resume data, kept outside React state so a
+  // session switch / sign-out can flush it synchronously instead of losing it
+  // to the debounce cleanup.
+  const pendingSaveRef = useRef<{ sessionId: string; resumeData: ResumeData } | null>(null);
+  // Chains saves so a later PUT never races an earlier one still in flight
+  // (which could otherwise land second and overwrite newer data with older).
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+
+  const flushSave = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (!pending) return saveChainRef.current;
+    pendingSaveRef.current = null;
+
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      setSaveStatus('saving');
+      try {
+        const res = await fetch(`/api/sessions/${pending.sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resumeData: pending.resumeData }),
+        });
+        setSaveStatus(res.ok ? 'saved' : 'error');
+      } catch {
+        setSaveStatus('error');
+      }
+    });
+    return saveChainRef.current;
+  }, []);
 
   // Keep session name in sync when user edits basics.name
   useEffect(() => {
@@ -70,30 +102,42 @@ function HomeContent() {
     };
   }, [state.resume.basics.name, currentSessionId, currentSessionName]);
 
-  // Auto-save resume data to current session (debounced)
+  // Auto-save resume data to current session (debounced, with an
+  // immediate-flush escape hatch — see flushSave above).
   useEffect(() => {
     if (!currentSessionId || !authSession?.user) return;
 
+    pendingSaveRef.current = { sessionId: currentSessionId, resumeData: state.resume };
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      setSaving(true);
-      try {
-        await fetch(`/api/sessions/${currentSessionId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resumeData: state.resume }),
-        });
-      } catch { /* ignore save errors */ }
-      setSaving(false);
-    }, 2000);
+    saveTimer.current = setTimeout(() => { flushSave(); }, 2000);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state.resume, currentSessionId, authSession?.user]);
+  }, [state.resume, currentSessionId, authSession?.user, flushSave]);
+
+  // Flush on tab close / navigation away so edits in the last debounce
+  // window aren't silently dropped.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      const pending = pendingSaveRef.current;
+      if (!pending) return;
+      pendingSaveRef.current = null;
+      fetch(`/api/sessions/${pending.sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeData: pending.resumeData }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Load session data when a session is selected
   const handleSelectSession = useCallback(async (id: string) => {
+    await flushSave(); // persist any pending edits on the session we're leaving
     try {
       const res = await fetch(`/api/sessions/${id}`);
       if (!res.ok) return;
@@ -105,11 +149,12 @@ function HomeContent() {
       setCurrentSessionId(id);
       setCurrentSessionName(data.name || 'Resume Session');
     } catch { /* ignore */ }
-  }, [state]);
+  }, [state, flushSave]);
 
   // Create a new session
   const handleNewSession = useCallback(async () => {
     if (!authSession?.user) return;
+    await flushSave(); // persist any pending edits on the session we're leaving
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -125,7 +170,7 @@ function HomeContent() {
         setActiveTab('input');
       }
     } catch { /* ignore */ }
-  }, [authSession?.user, state]);
+  }, [authSession?.user, state, flushSave]);
 
   // When user first loads and is authenticated, create or load most recent session
   useEffect(() => {
@@ -267,8 +312,14 @@ function HomeContent() {
           </button>
         </div>
 
-        <span className="text-xs text-gray-400 hidden sm:block">
-          {saving ? '● Saving…' : hasContent ? '● Saved' : 'No content yet'}
+        <span className={`text-xs hidden sm:block ${saveStatus === 'error' ? 'text-red-500' : 'text-gray-400'}`}>
+          {saveStatus === 'saving'
+            ? '● Saving…'
+            : saveStatus === 'error'
+            ? '● Save failed'
+            : hasContent
+            ? '● Saved'
+            : 'No content yet'}
         </span>
 
         {/* Version History Toggle */}
@@ -288,7 +339,7 @@ function HomeContent() {
         <div className="flex items-center gap-2 ml-2 border-l border-gray-200 pl-3">
           <span className="text-xs text-gray-500 hidden sm:block">{authSession?.user?.name || authSession?.user?.email}</span>
           <button
-            onClick={() => signOut()}
+            onClick={() => { flushSave().then(() => signOut()); }}
             className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors rounded hover:bg-gray-100"
             title="Sign out"
           >
@@ -357,7 +408,7 @@ function HomeContent() {
                 />
                 {/* Chat interface */}
                 <div className="mt-3 flex-1 min-h-[250px] flex flex-col border border-gray-200 rounded-lg p-3 bg-white">
-                  <ResumeChat resume={state.resume} onApplyEdits={handleApplyEdits} sessionId={currentSessionId} />
+                  <ResumeChat resume={state.resume} onApplyEdits={handleApplyEdits} sessionId={currentSessionId} flushPendingSave={flushSave} />
                 </div>
               </div>
             ) : (

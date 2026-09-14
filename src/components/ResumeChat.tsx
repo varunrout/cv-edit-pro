@@ -14,9 +14,13 @@ interface Props {
   resume: ResumeData;
   onApplyEdits: (edits: Partial<ResumeData>) => void;
   sessionId?: string | null;
+  /** Flush any pending debounced autosave before the server snapshots
+   *  "current" state for an AI-edit checkpoint, so the checkpoint doesn't
+   *  read stale (pre-previous-edit) data. */
+  flushPendingSave?: () => Promise<void>;
 }
 
-export default function ResumeChat({ resume, onApplyEdits, sessionId }: Props) {
+export default function ResumeChat({ resume, onApplyEdits, sessionId, flushPendingSave }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,13 +66,19 @@ export default function ResumeChat({ resume, onApplyEdits, sessionId }: Props) {
   const persistMessage = useCallback(async (role: string, content: string, edits?: Partial<ResumeData>) => {
     if (!sessionId) return;
     try {
+      // An assistant message carrying edits triggers a server-side snapshot
+      // of the session's *current* DB state — make sure that's actually
+      // up to date first, or the checkpoint can capture stale data.
+      if (role === 'assistant' && edits && flushPendingSave) {
+        await flushPendingSave();
+      }
       await fetch(`/api/sessions/${sessionId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role, content, edits: edits ? JSON.stringify(edits) : undefined }),
       });
     } catch { /* ignore persistence errors */ }
-  }, [sessionId]);
+  }, [sessionId, flushPendingSave]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
