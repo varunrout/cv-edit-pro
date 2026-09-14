@@ -27,7 +27,7 @@ type PdfContext = {
 };
 
 function sanitizeFilename(value: string) {
-  return value.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'resume';
+  return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'resume';
 }
 
 function createPdfContext(template: Props['template']): PdfContext {
