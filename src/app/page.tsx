@@ -10,6 +10,8 @@ import ResumeChat from '@/components/ResumeChat';
 import ParsedSectionsEditor from '@/components/ParsedSectionsEditor';
 import ResumePreview from '@/components/ResumePreview';
 import PrintToolbar from '@/components/PrintToolbar';
+import CoverLetterEditor from '@/components/CoverLetterEditor';
+import CoverLetterPreview from '@/components/CoverLetterPreview';
 import SessionPicker from '@/components/SessionPicker';
 import VersionTimeline from '@/components/VersionTimeline';
 import LoginPage from '@/app/login/page';
@@ -32,7 +34,8 @@ function HomeContent() {
   const { data: authSession, status } = useSession();
   const searchParams = useSearchParams();
   const state = useResumeState();
-  const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'preview'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'coverLetter' | 'preview'>('input');
+  const [coverLetterText, setCoverLetterText] = useState('');
   const [template, setTemplate] = useState<TemplateId>('classic');
   const [showEditor, setShowEditor] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
@@ -47,7 +50,7 @@ function HomeContent() {
   // Latest not-yet-persisted resume data, kept outside React state so a
   // session switch / sign-out can flush it synchronously instead of losing it
   // to the debounce cleanup.
-  const pendingSaveRef = useRef<{ sessionId: string; resumeData: ResumeData } | null>(null);
+  const pendingSaveRef = useRef<{ sessionId: string; resumeData: ResumeData; coverLetter: string } | null>(null);
   // Chains saves so a later PUT never races an earlier one still in flight
   // (which could otherwise land second and overwrite newer data with older).
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -67,7 +70,7 @@ function HomeContent() {
         const res = await fetch(`/api/sessions/${pending.sessionId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resumeData: pending.resumeData }),
+          body: JSON.stringify({ resumeData: pending.resumeData, coverLetter: pending.coverLetter }),
         });
         setSaveStatus(res.ok ? 'saved' : 'error');
       } catch {
@@ -112,14 +115,14 @@ function HomeContent() {
   useEffect(() => {
     if (!currentSessionId || !authSession?.user) return;
 
-    pendingSaveRef.current = { sessionId: currentSessionId, resumeData: state.resume };
+    pendingSaveRef.current = { sessionId: currentSessionId, resumeData: state.resume, coverLetter: coverLetterText };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { flushSave(); }, 2000);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state.resume, currentSessionId, authSession?.user, flushSave]);
+  }, [state.resume, coverLetterText, currentSessionId, authSession?.user, flushSave]);
 
   // Flush on tab close / navigation away so edits in the last debounce
   // window aren't silently dropped.
@@ -132,7 +135,7 @@ function HomeContent() {
       fetch(`/api/sessions/${pending.sessionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeData: pending.resumeData }),
+        body: JSON.stringify({ resumeData: pending.resumeData, coverLetter: pending.coverLetter }),
         keepalive: true,
       }).catch(() => {});
     };
@@ -152,6 +155,7 @@ function HomeContent() {
         setShowEditor(true);
       }
       setCurrentSessionId(id);
+      setCoverLetterText(data.coverLetter || '');
       const loadedName = data.name || 'Resume Session';
       setCurrentSessionName(loadedName);
       // Treat the loaded name as customized unless it exactly matches what
@@ -181,6 +185,7 @@ function HomeContent() {
         setCurrentSessionId(data.id);
         setCurrentSessionName(data.name || 'Resume Session');
         sessionNameCustomizedRef.current = false;
+        setCoverLetterText('');
         state.clearResume();
         setShowEditor(false);
         setActiveTab('input');
@@ -371,24 +376,29 @@ function HomeContent() {
 
       {/* Mobile Tabs */}
       <div className="no-print flex lg:hidden border-b border-gray-200 bg-white flex-shrink-0">
-        {(['input', 'editor', 'preview'] as const).map((tab) => (
+        {([
+          { key: 'input', label: 'Input' },
+          { key: 'editor', label: 'Editor' },
+          { key: 'coverLetter', label: 'Cover Letter' },
+          { key: 'preview', label: 'Preview' },
+        ] as const).map(({ key, label }) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
-              activeTab === tab
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${
+              activeTab === key
                 ? 'text-gray-900 border-b-2 border-gray-900'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {tab}
+            {label}
           </button>
         ))}
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel — Input + Editor */}
+        {/* Left Panel — Input + Editor + Cover Letter */}
         <div
           className={[
             'flex flex-col w-full lg:w-[42%] border-r border-gray-200 bg-white overflow-hidden flex-shrink-0',
@@ -400,7 +410,7 @@ function HomeContent() {
             <button
               onClick={() => setActiveTab('input')}
               className={`px-4 py-2 text-xs font-medium transition-colors ${
-                activeTab !== 'editor' ? 'text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:text-gray-700'
+                activeTab === 'input' ? 'text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Input
@@ -415,10 +425,25 @@ function HomeContent() {
                 Editor
               </button>
             )}
+            <button
+              onClick={() => setActiveTab('coverLetter')}
+              className={`px-4 py-2 text-xs font-medium transition-colors ${
+                activeTab === 'coverLetter' ? 'text-gray-900 border-b-2 border-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Cover Letter
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
-            {(activeTab !== 'editor' || !showEditor) ? (
+            {activeTab === 'coverLetter' ? (
+              <CoverLetterEditor
+                value={coverLetterText}
+                onChange={setCoverLetterText}
+                basics={state.resume.basics}
+                sessionName={currentSessionName}
+              />
+            ) : (activeTab !== 'editor' || !showEditor) ? (
               <div className="flex flex-col h-full min-h-0">
                 <ResumeInputPanel
                   onParsed={handleParsed}
@@ -459,15 +484,21 @@ function HomeContent() {
         <div
           className={[
             'flex-1 flex flex-col overflow-hidden bg-gray-100',
-            (activeTab === 'input' || activeTab === 'editor') ? 'hidden lg:flex' : 'flex',
+            (activeTab === 'input' || activeTab === 'editor' || activeTab === 'coverLetter') ? 'hidden lg:flex' : 'flex',
           ].join(' ')}
         >
-          <PrintToolbar template={template} onTemplateChange={setTemplate} resume={state.resume} sessionName={currentSessionName} />
-          <div className="flex-1 overflow-y-auto p-6 flex justify-center">
-            <div className="w-full max-w-[794px] shadow-lg ring-1 ring-gray-200">
-              <ResumePreview ref={previewRef} resume={state.resume} template={template} />
-            </div>
-          </div>
+          {activeTab === 'coverLetter' ? (
+            <CoverLetterPreview basics={state.resume.basics} content={coverLetterText} sessionName={currentSessionName} />
+          ) : (
+            <>
+              <PrintToolbar template={template} onTemplateChange={setTemplate} resume={state.resume} sessionName={currentSessionName} />
+              <div className="flex-1 overflow-y-auto p-6 flex justify-center">
+                <div className="w-full max-w-[794px] shadow-lg ring-1 ring-gray-200">
+                  <ResumePreview ref={previewRef} resume={state.resume} template={template} />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Version History Panel */}

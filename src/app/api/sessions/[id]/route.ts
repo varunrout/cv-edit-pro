@@ -30,6 +30,7 @@ export async function GET(_req: Request, { params }: Params) {
     id: resumeSession.id,
     name: resumeSession.name,
     resumeData: JSON.parse(resumeSession.resumeData),
+    coverLetter: resumeSession.coverLetter,
     messages: resumeSession.messages.map((m: { id: string; role: string; content: string; edits: string | null }) => ({
       id: m.id,
       role: m.role,
@@ -62,6 +63,7 @@ export async function PUT(req: Request, { params }: Params) {
   const updateData: Record<string, string> = {};
   if (body.name !== undefined) updateData.name = body.name;
   if (body.resumeData !== undefined) updateData.resumeData = JSON.stringify(body.resumeData);
+  if (body.coverLetter !== undefined) updateData.coverLetter = body.coverLetter;
 
   // If a snapshot source is provided, create a version snapshot before updating
   if (body.snapshotSource && body.resumeData !== undefined) {
