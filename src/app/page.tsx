@@ -37,6 +37,7 @@ function HomeContent() {
   const [activeTab, setActiveTab] = useState<'input' | 'editor' | 'coverLetter' | 'preview'>('input');
   const [coverLetterText, setCoverLetterText] = useState('');
   const [template, setTemplate] = useState<TemplateId>('classic');
+  const [clTemplate, setClTemplate] = useState<TemplateId>('classic');
   const [showEditor, setShowEditor] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -442,6 +443,7 @@ function HomeContent() {
                 onChange={setCoverLetterText}
                 basics={state.resume.basics}
                 sessionName={currentSessionName}
+                template={clTemplate}
               />
             ) : (activeTab !== 'editor' || !showEditor) ? (
               <div className="flex flex-col h-full min-h-0">
@@ -488,7 +490,13 @@ function HomeContent() {
           ].join(' ')}
         >
           {activeTab === 'coverLetter' ? (
-            <CoverLetterPreview basics={state.resume.basics} content={coverLetterText} sessionName={currentSessionName} />
+            <CoverLetterPreview
+              basics={state.resume.basics}
+              content={coverLetterText}
+              sessionName={currentSessionName}
+              template={clTemplate}
+              onTemplateChange={setClTemplate}
+            />
           ) : (
             <>
               <PrintToolbar template={template} onTemplateChange={setTemplate} resume={state.resume} sessionName={currentSessionName} />

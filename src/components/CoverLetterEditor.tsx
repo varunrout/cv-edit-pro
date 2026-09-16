@@ -3,22 +3,25 @@
 import { useState } from 'react';
 import { ResumeData } from '@/types/resume';
 import { buildCoverLetterPdf, coverLetterFilename } from '@/lib/coverLetterPdf';
+import type { TemplateId } from '@/lib/templates';
+import CoverLetterChat from '@/components/CoverLetterChat';
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   basics: ResumeData['basics'];
   sessionName: string;
+  template: TemplateId;
 }
 
-export default function CoverLetterEditor({ value, onChange, basics, sessionName }: Props) {
+export default function CoverLetterEditor({ value, onChange, basics, sessionName, template }: Props) {
   const [exporting, setExporting] = useState(false);
 
   const handleDownloadPdf = () => {
     if (exporting || !value.trim()) return;
     try {
       setExporting(true);
-      const doc = buildCoverLetterPdf(basics, value);
+      const doc = buildCoverLetterPdf(basics, value, template);
       doc.save(coverLetterFilename(sessionName));
     } finally {
       setExporting(false);
@@ -48,8 +51,11 @@ export default function CoverLetterEditor({ value, onChange, basics, sessionName
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Dear Hiring Manager,&#10;&#10;Paste your cover letter here..."
-        className="flex-1 w-full min-h-[300px] p-3 text-sm text-gray-800 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+        className="flex-shrink-0 w-full h-[220px] p-3 text-sm text-gray-800 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
       />
+      <div className="flex-1 min-h-0">
+        <CoverLetterChat currentText={value} basics={basics} onApplyRevision={onChange} />
+      </div>
     </div>
   );
 }

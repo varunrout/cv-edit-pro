@@ -3,16 +3,20 @@
 import { useState } from 'react';
 import { ResumeData } from '@/types/resume';
 import { buildCoverLetterPdf, coverLetterFilename } from '@/lib/coverLetterPdf';
+import { TEMPLATES, type TemplateId } from '@/lib/templates';
 
 interface Props {
   basics: ResumeData['basics'];
   content: string;
   sessionName: string;
+  template: TemplateId;
+  onTemplateChange: (t: TemplateId) => void;
 }
 
-export default function CoverLetterPreview({ basics, content, sessionName }: Props) {
+export default function CoverLetterPreview({ basics, content, sessionName, template, onTemplateChange }: Props) {
   const [exporting, setExporting] = useState(false);
 
+  const isClassical = template === 'classical';
   const contactItems = [basics.email, basics.phone, basics.location, basics.linkedin].filter(Boolean);
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const paragraphs = content.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -21,7 +25,7 @@ export default function CoverLetterPreview({ basics, content, sessionName }: Pro
     if (exporting || !content.trim()) return;
     try {
       setExporting(true);
-      const doc = buildCoverLetterPdf(basics, content);
+      const doc = buildCoverLetterPdf(basics, content, template);
       doc.save(coverLetterFilename(sessionName));
     } finally {
       setExporting(false);
@@ -31,7 +35,19 @@ export default function CoverLetterPreview({ basics, content, sessionName }: Pro
   return (
     <>
       <div className="no-print flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200">
-        <span className="text-xs font-medium text-gray-500">Cover Letter Preview</span>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onTemplateChange(t.id)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                template === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1" />
         <button
           onClick={handleDownloadPdf}
@@ -47,15 +63,30 @@ export default function CoverLetterPreview({ basics, content, sessionName }: Pro
       <div className="flex-1 overflow-y-auto p-6 flex justify-center">
         <div
           className="w-full max-w-[794px] bg-white shadow-lg ring-1 ring-gray-200"
-          style={{ padding: '56px 64px', minHeight: '1123px', boxSizing: 'border-box', fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif' }}
+          style={{
+            padding: '56px 64px',
+            minHeight: '1123px',
+            boxSizing: 'border-box',
+            fontFamily: isClassical ? '"var(--font-lora)", Georgia, serif' : '"Inter", "Helvetica Neue", Arial, sans-serif',
+          }}
         >
-          <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+          <h1
+            style={{
+              fontSize: isClassical ? '22px' : '20px',
+              fontFamily: isClassical ? '"var(--font-cormorant-garamond)", Georgia, serif' : undefined,
+              fontWeight: isClassical ? 400 : 700,
+              letterSpacing: isClassical ? '0.06em' : undefined,
+              textTransform: isClassical ? 'uppercase' : 'none',
+              color: '#111827',
+              marginBottom: '4px',
+            }}
+          >
             {basics.name || 'Your Name'}
           </h1>
           {contactItems.length > 0 && (
-            <p style={{ fontSize: '11px', color: '#6B7280' }}>{contactItems.join('  •  ')}</p>
+            <p style={{ fontSize: '11px', color: '#6B7280' }}>{contactItems.join(isClassical ? '  |  ' : '  •  ')}</p>
           )}
-          <hr style={{ margin: '16px 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
+          <hr style={{ margin: '16px 0', border: 'none', borderTop: isClassical ? '2px solid #201f1d' : '1px solid #E5E7EB' }} />
           <p style={{ fontSize: '11px', color: '#6B7280', marginBottom: '20px' }}>{today}</p>
 
           {paragraphs.length > 0 ? (
